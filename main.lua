@@ -114,3 +114,73 @@ function update(frame)
                 if e.act and pb[i].x >= e.x and pb[i].x <= e.x + 24 and pb[i].y >= e.y and pb[i].y <= e.y + 16 then
                     e.act = false
                     pb[i].act = false
+                    break
+                end
+            end
+        end
+    end
+
+    for i = 1, 2 do
+        if fw[i].hp > 0 then
+            for j = 1, 3 do
+                if pb[j].act and pb[j].x >= fw[i].x and pb[j].x <= fw[i].x + 40 and pb[j].y >= fw[i].y and pb[j].y <= fw[i].y + 12 then
+                    fw[i].hp = fw[i].hp - 1
+                    pb[j].act = false
+                end
+                if eb[j].act and eb[j].x >= fw[i].x and eb[j].x <= fw[i].x + 40 and eb[j].y >= fw[i].y and eb[j].y <= fw[i].y + 12 then
+                    fw[i].hp = fw[i].hp - 1
+                    eb[j].act = false
+                end
+            end
+        end
+    end
+
+    -- 7. Renderização com Primitivas Gráficas
+
+    -- Firewalls (Blocos Verdes em Degradê por Dano)
+    for i = 1, 2 do
+        if fw[i].hp > 0 then
+            local col = (fw[i].hp > 3) and 1 or 6
+            ui.rectfill(fw[i].x, fw[i].y, fw[i].x + 40, fw[i].y + 10, col)
+            ui.rect(fw[i].x, fw[i].y, fw[i].x + 40, fw[i].y + 10, 7)
+        end
+    end
+
+    -- Nave Blue Team (Formato Geométrico Azul)
+    ui.rectfill(px, py + 4, px + 36, py + 10, 3)     -- Base
+    ui.trisfill(px + 12, py + 4, px + 24, py + 4, px + 18, py - 2, 4) -- Ponta da Nave
+
+    -- Vírus Red Team (Formato Losango/Inimigo Pulsante)
+    for i = 1, 6 do
+        local e = enemies[i]
+        if e.act then
+            if anim == 1 then
+                -- Frame 1: Losango Vermelho com Centro Claro
+                ui.trisfill(e.x + 12, e.y, e.x, e.y + 8, e.x + 24, e.y + 8, 5)
+                ui.trisfill(e.x, e.y + 8, e.x + 24, e.y + 8, e.x + 12, e.y + 16, 5)
+                ui.circfill(e.x + 12, e.y + 8, 2, 7)
+            else
+                -- Frame 2: Quadrado Rotacionado
+                ui.rectfill(e.x + 4, e.y + 2, e.x + 20, e.y + 14, 5)
+                ui.rect(e.x + 2, e.y, e.x + 22, e.y + 16, 6)
+            end
+        end
+    end
+
+    -- Tiros do Player (Cyan)
+    for i = 1, 3 do
+        if pb[i].act then
+            ui.rectfill(pb[i].x, pb[i].y, pb[i].x + 2, pb[i].y + 6, 4)
+        end
+    end
+
+    -- Tiros Inimigos (Vermelho)
+    for i = 1, 3 do
+        if eb[i].act then
+            ui.circfill(eb[i].x, eb[i].y, 3, 5)
+        end
+    end
+
+    -- Linha Superior do HUD
+    ui.line(0, 16, 480, 16, 1)
+end
