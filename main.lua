@@ -121,7 +121,7 @@ function loop(frame)
             ui.print("BLUE TEAM OFFLINE", 155, 105, RED)
         end
 
-        ui.print("PRESS Z TO RESTART", 155, 125, WHITE)
+        ui.print("PRESS B TO RESTART", 155, 125, WHITE)
 
         if ui.btnp(BTN_Z) then
             resetGame()
