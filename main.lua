@@ -193,7 +193,7 @@ function loop(frame)
 
     ui.cls(BLACK)
 
-    ui.print("CIRCULAR DEFENSE", 175, 8, GREEN)
+    ui.print("SYSTEM INVADERS", 175, 8, GREEN)
     ui.print("SCORE:", 12, 8, WHITE)
     ui.print(tostring(score), 60, 8, YELLOW)
 
