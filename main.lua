@@ -1,433 +1,340 @@
 
 -- SPACE INVADERS: SYSTEM FAILURE
+-- Versao otimizada para memoria
 -- Blue Team vs Red Team
--- API gráfica: Lupi Game
+-- Controles: setas para mover, Z para atirar/reiniciar
 
--- PALETA RGB555
-Palette = {
-    0x0000, -- 0: Preto
-    0x7FFF, -- 1: Branco
-    0x001F, -- 2: Azul
-    0x7C00, -- 3: Vermelho
-    0x03FF, -- 4: Ciano
-    0x7FE0, -- 5: Amarelo
-    0x03E0, -- 6: Verde
-    0x3DEF  -- 7: Cinza
+local W, H = 480, 270
+
+local PLAYER_SPEED = 3
+local BULLET_SPEED = 5
+local ENEMY_BULLET_SPEED = 2
+local MAX_PLAYER_BULLETS = 3
+local MAX_ENEMY_BULLETS = 4
+
+local BLUE = 1
+local RED = 2
+local WHITE = 3
+local BLACK = 0
+local GREEN = 4
+local YELLOW = 5
+
+local palette = {
+    [0] = "#080d18",
+    [1] = "#36a9ff",
+    [2] = "#ff3b54",
+    [3] = "#e8f4ff",
+    [4] = "#54ff9f",
+    [5] = "#ffe66d"
 }
 
--- CONFIGURACOES
-SCREEN_W = 480
-SCREEN_H = 270
-MAX_SCORE = 1000
-ENEMY_POINTS = 25
+-- Inimigos: 4 linhas x 5 colunas
+local enemies = {}
+for i = 1, 20 do
+    local col = (i - 1) % 5
+    local row = math.floor((i - 1) / 5)
 
--- ESTADO DO JOGO
-player = {
-    x = 240,
-    y = 245,
-    speed = 3,
-    cooldown = 0
+    enemies[i] = {
+        x = 55 + col * 78,
+        y = 38 + row * 25,
+        alive = true
+    }
+end
+
+-- Projeteis com slots fixos: sem criar/remover tabelas durante o jogo
+local bullets = {}
+for i = 1, MAX_PLAYER_BULLETS do
+    bullets[i] = { x = 0, y = 0, active = false }
+end
+
+local enemyBullets = {}
+for i = 1, MAX_ENEMY_BULLETS do
+    enemyBullets[i] = { x = 0, y = 0, active = false }
+end
+
+local player = {
+    x = 228,
+    y = 238,
+    w = 24,
+    h = 14
 }
 
-enemies = {}
-bullets = {}
-enemyBullets = {}
+local score = 0
+local lives = 3
+local state = "playing"
+local enemyDir = 1
+local enemySpeed = 0.45
+local tick = 0
+local shootCooldown = 0
+local enemyShootCooldown = 0
 
-score = 0
-lives = 3
-gameState = "playing"
+local function resetGame()
+    player.x = 228
+    score = 0
+    lives = 3
+    state = "playing"
+    enemyDir = 1
+    enemySpeed = 0.45
+    tick = 0
+    shootCooldown = 0
+    enemyShootCooldown = 0
 
-enemyDX = 0.65
-enemyDrop = 7
-enemyShootTimer = 0
+    for i = 1, 20 do
+        local col = (i - 1) % 5
+        local row = math.floor((i - 1) / 5)
 
--- CRIAR 40 VIRUS
-for row = 1, 5 do
-    for col = 1, 8 do
-        table.insert(enemies, {
-            x = 62 + (col - 1) * 46,
-            y = 35 + (row - 1) * 23,
-            alive = true,
-            row = row
-        })
+        enemies[i].x = 55 + col * 78
+        enemies[i].y = 38 + row * 25
+        enemies[i].alive = true
+    end
+
+    for i = 1, MAX_PLAYER_BULLETS do
+        bullets[i].active = false
+    end
+
+    for i = 1, MAX_ENEMY_BULLETS do
+        enemyBullets[i].active = false
     end
 end
 
--- DESENHAR A NAVE AZUL
-function drawPlayer()
-    -- Corpo
-    ui.trisfill(
-        player.x, player.y - 9,
-        player.x - 10, player.y + 7,
-        player.x + 10, player.y + 7,
-        2
-    )
-
-    ui.rectfill(
-        player.x - 4, player.y,
-        player.x + 4, player.y + 5,
-        4
-    )
-
-    -- Canhoes
-    ui.rectfill(
-        player.x - 12, player.y + 3,
-        player.x - 9, player.y + 7,
-        2
-    )
-
-    ui.rectfill(
-        player.x + 9, player.y + 3,
-        player.x + 12, player.y + 7,
-        2
-    )
-end
-
--- DESENHAR UM VIRUS VERMELHO
-function drawEnemy(e)
-    if not e.alive then
-        return
-    end
-
-    ui.rectfill(
-        e.x - 8, e.y - 5,
-        e.x + 8, e.y + 5,
-        3
-    )
-
-    -- Olhos digitais
-    ui.rectfill(
-        e.x - 5, e.y - 2,
-        e.x - 2, e.y + 1,
-        1
-    )
-
-    ui.rectfill(
-        e.x + 2, e.y - 2,
-        e.x + 5, e.y + 1,
-        1
-    )
-
-    -- Pernas do virus
-    ui.line(
-        e.x - 6, e.y + 5,
-        e.x - 10, e.y + 9,
-        3
-    )
-
-    ui.line(
-        e.x + 6, e.y + 5,
-        e.x + 10, e.y + 9,
-        3
-    )
-end
-
--- DISPARO DA NAVE
-function shoot()
-    if player.cooldown <= 0 then
-        table.insert(bullets, {
-            x = player.x,
-            y = player.y - 10,
-            speed = 5
-        })
-
-        player.cooldown = 12
-        sfx.fx(0, 76)
-    end
-end
-
--- ATUALIZAR PROJETEIS AZUIS
-function updateBullets()
-    for i = #bullets, 1, -1 do
-        local b = bullets[i]
-        b.y = b.y - b.speed
-
-        if b.y < 0 then
-            table.remove(bullets, i)
-        else
-            -- Colisao com os virus
-            for j = 1, #enemies do
-                local e = enemies[j]
-
-                if e.alive
-                and math.abs(b.x - e.x) < 10
-                and math.abs(b.y - e.y) < 9 then
-
-                    e.alive = false
-                    score = score + ENEMY_POINTS
-
-                    table.remove(bullets, i)
-
-                    sfx.fx(1, 84)
-                    break
-                end
-            end
+local function spawnPlayerBullet()
+    for i = 1, MAX_PLAYER_BULLETS do
+        if not bullets[i].active then
+            bullets[i].x = player.x + 11
+            bullets[i].y = player.y - 4
+            bullets[i].active = true
+            return
         end
     end
 end
 
--- DISPAROS DOS VIRUS
-function updateEnemyBullets()
-    for i = #enemyBullets, 1, -1 do
-        local b = enemyBullets[i]
-        b.y = b.y + b.speed
+local function spawnEnemyBullet()
+    for i = 1, MAX_ENEMY_BULLETS do
+        if not enemyBullets[i].active then
+            -- Escolhe um inimigo vivo sem criar uma tabela nova
+            local start = (math.floor(tick / 35) % 20) + 1
 
-        -- Atingiu a nave azul?
-        if math.abs(b.x - player.x) < 11
-        and math.abs(b.y - player.y) < 9 then
-
-            table.remove(enemyBullets, i)
-            lives = lives - 1
-            sfx.fx(1, 45)
-
-            if lives <= 0 then
-                gameState = "lost"
-            end
-
-        elseif b.y > SCREEN_H then
-            table.remove(enemyBullets, i)
-        end
-    end
-end
-
--- MOVIMENTAR OS VIRUS
-function updateEnemies(frame)
-    local hitWall = false
-
-    for i = 1, #enemies do
-        local e = enemies[i]
-
-        if e.alive then
-            e.x = e.x + enemyDX
-
-            if e.x >= 463 or e.x <= 17 then
-                hitWall = true
-            end
-
-            -- Virus alcancou a zona da nave
-            if e.y >= player.y - 15 then
-                gameState = "lost"
-            end
-        end
-    end
-
-    if hitWall then
-        enemyDX = -enemyDX
-
-        for i = 1, #enemies do
-            if enemies[i].alive then
-                enemies[i].y =
-                    enemies[i].y + enemyDrop
-            end
-        end
-    end
-
-    -- Escolher um virus vivo para atirar
-    enemyShootTimer = enemyShootTimer + 1
-
-    if enemyShootTimer >= 45 then
-        enemyShootTimer = 0
-
-        local aliveCount = 0
-
-        for i = 1, #enemies do
-            if enemies[i].alive then
-                aliveCount = aliveCount + 1
-            end
-        end
-
-        if aliveCount > 0 then
-            local targetNumber =
-                (math.floor(frame / 45) % aliveCount) + 1
-
-            local current = 0
-
-            for i = 1, #enemies do
-                local e = enemies[i]
+            for j = 0, 19 do
+                local idx = ((start + j - 1) % 20) + 1
+                local e = enemies[idx]
 
                 if e.alive then
-                    current = current + 1
+                    enemyBullets[i].x = e.x + 8
+                    enemyBullets[i].y = e.y + 12
+                    enemyBullets[i].active = true
+                    return
+                end
+            end
+            return
+        end
+    end
+end
 
-                    if current == targetNumber then
-                        table.insert(enemyBullets, {
-                            x = e.x,
-                            y = e.y + 8,
-                            speed = 2
-                        })
+local function updatePlayer()
+    if ui.btn(LEFT) then
+        player.x = player.x - PLAYER_SPEED
+    end
+
+    if ui.btn(RIGHT) then
+        player.x = player.x + PLAYER_SPEED
+    end
+
+    if player.x < 4 then
+        player.x = 4
+    end
+    if player.x > W - player.w - 4 then
+        player.x = W - player.w - 4
+    end
+
+    if shootCooldown > 0 then
+        shootCooldown = shootCooldown - 1
+    end
+
+    if ui.btnp(BTN_Z) and shootCooldown <= 0 then
+        spawnPlayerBullet()
+        shootCooldown = 12
+    end
+end
+
+local function updateBullets()
+    for i = 1, MAX_PLAYER_BULLETS do
+        local b = bullets[i]
+
+        if b.active then
+            b.y = b.y - BULLET_SPEED
+
+            if b.y < 0 then
+                b.active = false
+            else
+                for j = 1, 20 do
+                    local e = enemies[j]
+
+                    if e.alive
+                    and b.x >= e.x and b.x <= e.x + 16
+                    and b.y >= e.y and b.y <= e.y + 14 then
+                        e.alive = false
+                        b.active = false
+                        score = score + 25
                         break
                     end
                 end
             end
         end
     end
-end
 
--- DESENHAR O FUNDO DIGITAL
-function drawBackground(frame)
-    ui.cls(0)
-
-    -- Linhas de dados no fundo
-    for i = 1, 12 do
-        local x = (i * 41 + frame * 2) % SCREEN_W
-        local y = (i * 23) % SCREEN_H
-
-        ui.rectfill(x, y, x + 1, y + 1, 7)
-    end
-
-    -- Linha de perigo
-    ui.line(0, 225, SCREEN_W, 225, 3)
-
-    ui.print("SYSTEM DEFENSE // BLUE TEAM", 8, 5, 4)
-    ui.print("SCORE: " .. score, 8, 17, 1)
-    ui.print("LIVES: " .. lives, 390, 17, 5)
-
-    ui.rect(7, 29, 473, 259, 7)
-end
-
--- DESENHAR OS PROJETEIS
-function drawBullets()
-    for i = 1, #bullets do
-        local b = bullets[i]
-
-        ui.rectfill(
-            b.x - 1, b.y - 4,
-            b.x + 1, b.y + 4,
-            4
-        )
-    end
-
-    for i = 1, #enemyBullets do
+    for i = 1, MAX_ENEMY_BULLETS do
         local b = enemyBullets[i]
 
-        ui.rectfill(
-            b.x - 2, b.y - 3,
-            b.x + 2, b.y + 3,
-            3
-        )
+        if b.active then
+            b.y = b.y + ENEMY_BULLET_SPEED
+
+            if b.y > H then
+                b.active = false
+            elseif b.x >= player.x
+            and b.x <= player.x + player.w
+            and b.y >= player.y
+            and b.y <= player.y + player.h then
+                b.active = false
+                lives = lives - 1
+
+                if lives <= 0 then
+                    state = "lost"
+                end
+            end
+        end
     end
 end
 
--- TELA DE FIM
-function drawEndScreen()
-    ui.cls(0)
+local function updateEnemies()
+    local hitEdge = false
+    local aliveCount = 0
 
-    ui.rectfill(35, 45, 445, 220, 7)
-    ui.rect(35, 45, 445, 220, 3)
+    for i = 1, 20 do
+        local e = enemies[i]
 
-    if gameState == "won" then
-        ui.print("SYSTEM RESTORED", 160, 78, 6)
-        ui.print("BLUE TEAM WINS!", 170, 105, 4)
-        ui.print("ALL VIRUSES ELIMINATED", 135, 130, 1)
+        if e.alive then
+            aliveCount = aliveCount + 1
+            e.x = e.x + enemyDir * enemySpeed
+
+            if e.x <= 5 or e.x >= W - 21 then
+                hitEdge = true
+            end
+
+            if e.y >= player.y - 12 then
+                state = "lost"
+            end
+        end
+    end
+
+    if hitEdge then
+        enemyDir = -enemyDir
+
+        for i = 1, 20 do
+            if enemies[i].alive then
+                enemies[i].y = enemies[i].y + 5
+            end
+        end
+    end
+
+    if aliveCount == 0 then
+        state = "won"
+    end
+end
+
+local function drawPlayer()
+    -- Nave azul desenhada com retangulos
+    ui.rectfill(player.x + 9, player.y, 6, 4, BLUE)
+    ui.rectfill(player.x + 5, player.y + 4, 14, 5, BLUE)
+    ui.rectfill(player.x, player.y + 9, 24, 5, BLUE)
+    ui.rectfill(player.x + 10, player.y + 5, 4, 3, WHITE)
+end
+
+local function drawEnemies()
+    for i = 1, 20 do
+        local e = enemies[i]
+
+        if e.alive then
+            -- Corpo vermelho
+            ui.rectfill(e.x + 3, e.y, 10, 4, RED)
+            ui.rectfill(e.x, e.y + 4, 16, 7, RED)
+            ui.rectfill(e.x + 2, e.y + 11, 4, 3, RED)
+            ui.rectfill(e.x + 10, e.y + 11, 4, 3, RED)
+
+            -- Olhos
+            ui.rectfill(e.x + 3, e.y + 5, 3, 3, WHITE)
+            ui.rectfill(e.x + 10, e.y + 5, 3, 3, WHITE)
+        end
+    end
+end
+
+local function drawBullets()
+    for i = 1, MAX_PLAYER_BULLETS do
+        local b = bullets[i]
+        if b.active then
+            ui.rectfill(b.x, b.y, 2, 6, GREEN)
+        end
+    end
+
+    for i = 1, MAX_ENEMY_BULLETS do
+        local b = enemyBullets[i]
+        if b.active then
+            ui.rectfill(b.x, b.y, 3, 5, RED)
+        end
+    end
+end
+
+local function drawHUD()
+    ui.print("BLUE TEAM", 8, 7, BLUE)
+    ui.print("SCORE: " .. score, 180, 7, WHITE)
+    ui.print("LIVES: " .. lives, 385, 7, GREEN)
+    ui.line(8, 22, 472, 22, BLUE)
+end
+
+local function drawEndScreen()
+    ui.rectfill(45, 75, 390, 115, BLACK)
+
+    if state == "won" then
+        ui.print("SYSTEM RESTORED", 157, 95, GREEN)
+        ui.print("RED TEAM ELIMINATED", 145, 125, WHITE)
+        ui.print("FINAL SCORE: " .. score, 174, 148, YELLOW)
     else
-        ui.print("FALHA DO SISTEMA", 155, 75, 3)
-        ui.print("RED TEAM WINS", 170, 102, 3)
-        ui.print("VIRUS INVASION COMPLETE", 125, 128, 1)
+        ui.print("SYSTEM FAILURE", 163, 95, RED)
+        ui.print("BLUE TEAM DESTROYED", 143, 125, WHITE)
+        ui.print("FINAL SCORE: " .. score, 174, 148, YELLOW)
     end
 
-    ui.print("FINAL SCORE: " .. score, 170, 157, 5)
-    ui.print("PRESS Z TO RESTART", 155, 190, 4)
+    ui.print("PRESS Z TO RESTART", 160, 169, WHITE)
 end
 
--- REINICIAR O JOGO
-function restartGame()
-    player.x = 240
-    player.y = 245
-    player.cooldown = 0
-
-    enemies = {}
-    bullets = {}
-    enemyBullets = {}
-
-    for row = 1, 5 do
-        for col = 1, 8 do
-            table.insert(enemies, {
-                x = 62 + (col - 1) * 46,
-                y = 35 + (row - 1) * 23,
-                alive = true,
-                row = row
-            })
-        end
-    end
-
-    score = 0
-    lives = 3
-    enemyDX = 0.65
-    enemyShootTimer = 0
-    gameState = "playing"
-end
-
--- LOOP PRINCIPAL DO LUPI
 function update(frame)
-
-    -- A paleta deve ser registrada a cada quadro
-    for i = 1, #Palette do
-        ui.palset(i - 1, Palette[i])
+    -- Paleta registrada em todo frame, conforme a API do Lupi
+    for i = 0, 5 do
+        ui.palset(i, palette[i])
     end
 
-    -- Tela final
-    if gameState ~= "playing" then
-        drawEndScreen()
+    ui.cls(BLACK)
+    tick = tick + 1
 
-        if ui.btnp(BTN_Z) then
-            restartGame()
+    if state == "playing" then
+        updatePlayer()
+        updateBullets()
+        updateEnemies()
+
+        enemyShootCooldown = enemyShootCooldown + 1
+        if enemyShootCooldown >= 35 then
+            spawnEnemyBullet()
+            enemyShootCooldown = 0
         end
-
-        return
+    elseif ui.btnp(BTN_Z) then
+        resetGame()
     end
 
-    -- Movimento da nave
-    if ui.btn(LEFT) then
-        player.x = player.x - player.speed
-    end
-
-    if ui.btn(RIGHT) then
-        player.x = player.x + player.speed
-    end
-
-    player.x = ui.mid(15, player.x, 465)
-
-    -- Controle de disparo
-    if player.cooldown > 0 then
-        player.cooldown = player.cooldown - 1
-    end
-
-    if ui.btn(BTN_Z) then
-        shoot()
-    end
-
-    -- Atualizar o mundo
-    updateEnemies(frame)
-    updateBullets()
-    updateEnemyBullets()
-
-    -- Vitoria: 40 virus x 25 pontos = 1000
-    if score >= MAX_SCORE then
-        score = MAX_SCORE
-        gameState = "won"
-    end
-
-    -- Desenhar a cena
-    drawBackground(frame)
-
-    for i = 1, #enemies do
-        drawEnemy(enemies[i])
-    end
-
+    drawHUD()
     drawPlayer()
+    drawEnemies()
     drawBullets()
 
-    -- Barra de progresso
-    ui.rect(145, 17, 325, 23, 7)
-
-    local barWidth = math.floor(score / MAX_SCORE * 176)
-
-    if barWidth > 0 then
-        ui.rectfill(
-            147, 19,
-            147 + barWidth, 21,
-            6
-        )
+    if state ~= "playing" then
+        drawEndScreen()
     end
-
-    ui.print("Z: FIRE", 200, 249, 4)
 end
