@@ -22,11 +22,17 @@ local palette = {
     [5] = 0x7FE0
 }
 
-local FIRE_BUTTON = BTN_Z
+local FIRE_BUTTON = BTN_B
 
 local TURN_SPEED = 0.055
 local BULLET_SPEED = 4
-local ENEMY_SPEED = 0.30
+
+local INITIAL_ENEMY_SPEED = 0.45
+local ENEMY_SPEED_INCREASE = 0.05
+local POINTS_PER_LEVEL = 500
+
+local ENEMY_SPEED = INITIAL_ENEMY_SPEED
+
 local MAX_ENEMIES = 6
 local MAX_BULLETS = 8
 
@@ -150,8 +156,10 @@ local function resetGame()
     shootCooldown = 0
     gameOver = false
 
-    -- High Score nao e zerado ao reiniciar
+    -- Reinicia a velocidade dos inimigos
+    ENEMY_SPEED = INITIAL_ENEMY_SPEED
 
+    -- O High Score permanece entre as partidas
     for i = 1, MAX_ENEMIES do
         respawnEnemy(enemies[i])
     end
@@ -185,15 +193,13 @@ function loop(frame)
 
     ui.cls(BLACK)
 
-    -- Interface e pontuacao
-    ui.print("SYSTEM INVADERS", 175, 8, GREEN)
+    ui.print("CIRCULAR DEFENSE", 175, 8, GREEN)
     ui.print("SCORE:", 12, 8, WHITE)
     ui.print(tostring(score), 60, 8, YELLOW)
 
     ui.print("BEST:", 350, 8, WHITE)
     ui.print(tostring(highScore), 400, 8, YELLOW)
 
-    -- Tela de derrota
     if gameOver then
         ui.print("SYSTEM FAILURE", 174, 105, RED)
         ui.print("PRESS B TO RESTART", 164, 125, WHITE)
@@ -224,7 +230,13 @@ function loop(frame)
         shootCooldown = 10
     end
 
-    -- Movimento dos inimigos em direcao ao centro
+    -- Atualizar velocidade conforme a pontuacao
+    local level = math.floor(score / POINTS_PER_LEVEL)
+
+    ENEMY_SPEED = INITIAL_ENEMY_SPEED
+        + level * ENEMY_SPEED_INCREASE
+
+    -- Inimigos avancam em direcao ao centro
     for i = 1, MAX_ENEMIES do
         local e = enemies[i]
 
@@ -236,7 +248,6 @@ function loop(frame)
             if distance < 8 then
                 gameOver = true
 
-                -- Atualiza o recorde ao morrer
                 if score > highScore then
                     highScore = score
                 end
@@ -278,17 +289,14 @@ function loop(frame)
         end
     end
 
-    -- Desenhar inimigos triangulares apontando para o jogador
+    -- Desenhar inimigos
     for i = 1, MAX_ENEMIES do
         local e = enemies[i]
 
         if e.alive then
             local enemyAngle = angleTo(e.x, e.y, CX, CY)
 
-            drawTriangle(
-                e.x, e.y,
-                enemyAngle, 7, RED
-            )
+            drawTriangle(e.x, e.y, enemyAngle, 7, RED)
         end
     end
 
@@ -308,7 +316,7 @@ function loop(frame)
     -- Jogador triangular fixo no centro
     drawTriangle(CX, CY, angle, 10, BLUE)
 
-    -- Indicador branco da direcao da mira
+    -- Indicador da mira
     local tipX = CX + math.cos(angle) * 12
     local tipY = CY + math.sin(angle) * 12
 
