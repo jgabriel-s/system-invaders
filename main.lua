@@ -1,6 +1,6 @@
 -- ============================================================
 -- SYSTEM INVADERS (Jogador + Inimigos Básicos)
--- Lupi Game API (480x270 @ 60 FPS)
+-- Lupi Game API (480x270 @ 60 FPS)dwadawdwadwa
 -- ============================================================
 
 local Palette = { 0x0000, 0x03E0, 0x0120, 0x001F, 0x03FF, 0x7C00, 0x7FE0, 0x7FFF }
