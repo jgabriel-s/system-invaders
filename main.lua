@@ -10,7 +10,7 @@ function loop(frame)
 
     ui.clip(0,0,480,270)
     ui.camera(0,0)
-    ui.cls(Palette.hex(0x45283c))
+    ui.cls(Palette.hex(0x0000))
     
-    ui.print("System Invaders - 1.0", 32, 32, Palette.hex(0x001F))
+    ui.print("System Invaders - 1.0", 32, 32, Palette.id(11))
 end 
