@@ -23,7 +23,7 @@ local palette = {
     [5] = 0x7FE0
 }
 
-local FIRE_BUTTON = BTN_B
+local FIRE_BUTTON = BTN_Z
 
 local TURN_SPEED = 0.055
 local BULLET_SPEED = 4
