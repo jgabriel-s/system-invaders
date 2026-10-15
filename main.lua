@@ -28,8 +28,6 @@ local BULLET_SPEED = 5
 local ENEMY_BULLET_SPEED = 2
 local SCORE_CAP = 500
 
--- Botao B: confira o identificador na API do Lupi
-local FIRE_BUTTON = BTN_B
 
 local player = {
     x = 232,
@@ -131,7 +129,7 @@ function loop(frame)
 
         ui.print("PRESS B TO RESTART", 155, 125, WHITE)
 
-        if ui.btnp(FIRE_BUTTON) then
+        if ui.btnp(BTN_Z) then
             resetGame()
         end
 
@@ -160,7 +158,7 @@ function loop(frame)
         shootCooldown = shootCooldown - 1
     end
 
-    if ui.btn(FIRE_BUTTON) and shootCooldown == 0 then
+    if ui.btn(BTN_Z) and shootCooldown == 0 then
         for i = 1, 3 do
             local b = playerBullets[i]
 
