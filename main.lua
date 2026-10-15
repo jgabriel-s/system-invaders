@@ -1,8 +1,8 @@
 
--- SPACE INVADERS: CYBER WAR
--- RED TEAM: ataque / virus
--- BLUE TEAM: defesa / nave
--- Sem bibliotecas externas
+-- SPACE INVADERS: SYSTEM FAILURE
+-- RED TEAM = ATAQUE (VIRUS)
+-- BLUE TEAM = DEFESA (JOGADOR)
+-- Controles: LEFT / RIGHT / B
 
 local W, H = 480, 270
 
@@ -13,6 +13,7 @@ local WHITE  = 3
 local GREEN  = 4
 local YELLOW = 5
 
+-- Cores RGB555
 local palette = {
     [0] = 0x0000,
     [1] = 0x001F,
@@ -27,6 +28,9 @@ local BULLET_SPEED = 5
 local ENEMY_BULLET_SPEED = 2
 local SCORE_CAP = 500
 
+-- Botao B: confira o identificador na API do Lupi
+local FIRE_BUTTON = BTN_B
+
 local player = {
     x = 232,
     y = 238,
@@ -34,6 +38,7 @@ local player = {
     h = 12
 }
 
+-- Projeteis fixos para reduzir alocacoes
 local playerBullets = {}
 for i = 1, 3 do
     playerBullets[i] = {x = 0, y = 0, active = false}
@@ -44,13 +49,16 @@ for i = 1, 4 do
     enemyBullets[i] = {x = 0, y = 0, active = false}
 end
 
+-- 12 virus do Red Team
 local enemies = {}
+
 for row = 1, 3 do
     for col = 1, 4 do
         local i = (row - 1) * 4 + col
+
         enemies[i] = {
             x = 65 + (col - 1) * 85,
-            y = 48 + (row - 1) * 28,
+            y = 35 + (row - 1) * 28,
             alive = true
         }
     end
@@ -79,8 +87,9 @@ local function resetGame()
     for row = 1, 3 do
         for col = 1, 4 do
             local i = (row - 1) * 4 + col
+
             enemies[i].x = 65 + (col - 1) * 85
-            enemies[i].y = 48 + (row - 1) * 28
+            enemies[i].y = 35 + (row - 1) * 28
             enemies[i].alive = true
         end
     end
@@ -97,60 +106,39 @@ end
 function loop(frame)
     tick = tick + 1
 
+    -- Paleta obrigatoria por frame
     for i = 0, 5 do
         ui.palset(i, palette[i])
     end
 
     ui.cls(BLACK)
 
-    -- INTERFACE HACKER
-    ui.rect(5, 5, 474, 264, BLUE)
-    ui.rectfill(8, 8, 471, 31, BLUE)
-    ui.print("CYBER WAR // DEFENSE SYSTEM", 95, 16, WHITE)
+    -- Interface simples, como na versao anterior
+    ui.print("SYSTEM FAILURE", 170, 8, GREEN)
+    ui.print("RED TEAM: VIRUS ATTACK", 125, 25, RED)
+    ui.print("BLUE TEAM: DEFEND", 145, 39, BLUE)
 
-    -- Barra de alerta
-    ui.rectfill(8, 35, 471, 49, RED)
-    ui.print("WARNING: RED TEAM INTRUSION", 110, 39, WHITE)
-
-    -- Indicadores
-    ui.print("RED TEAM: ATTACK", 20, 56, RED)
-    ui.print("BLUE TEAM: DEFENSE", 260, 56, BLUE)
-
-    ui.print("SCORE", 365, 72, GREEN)
-    ui.print(tostring(score), 420, 72, WHITE)
-
-    -- Linhas de terminal nas laterais
-    ui.print("> FIREWALL ACTIVE", 15, 91, GREEN)
-    ui.print("> VIRUS DETECTED", 15, 105, RED)
-    ui.print("> DEFEND CORE", 15, 119, BLUE)
-
-    ui.print("MOVE: LEFT / RIGHT", 325, 105, WHITE)
-    ui.print("FIRE: Z", 365, 119, YELLOW)
+    ui.print("SCORE:", 365, 8, WHITE)
+    ui.print(tostring(score), 415, 8, YELLOW)
 
     -- Tela final
     if gameOver or victory then
-        ui.rectfill(65, 91, 415, 184, BLACK)
-        ui.rect(65, 91, 415, 184, BLUE)
-
         if victory then
-            ui.print("SYSTEM SECURE", 175, 112, GREEN)
-            ui.print("RED TEAM ELIMINATED", 145, 135, WHITE)
+            ui.print("SYSTEM RESTORED!", 165, 105, GREEN)
         else
-            ui.print("SYSTEM BREACHED", 165, 112, RED)
-            ui.print("BLUE TEAM OFFLINE", 155, 135, WHITE)
+            ui.print("BLUE TEAM OFFLINE", 155, 105, RED)
         end
 
-        ui.print("PRESS B TO RESTART", 160, 160, YELLOW)
+        ui.print("PRESS B TO RESTART", 155, 125, WHITE)
 
-        -- BTN_Z representa o botao B neste esquema de controles
-        if ui.btnp(BTN_Z) then
+        if ui.btnp(FIRE_BUTTON) then
             resetGame()
         end
 
         return
     end
 
-    -- MOVIMENTO BLUE TEAM
+    -- Jogador: Blue Team
     if ui.btn(LEFT) then
         player.x = player.x - PLAYER_SPEED
     end
@@ -159,20 +147,20 @@ function loop(frame)
         player.x = player.x + PLAYER_SPEED
     end
 
-    if player.x < 12 then
-        player.x = 12
+    if player.x < 0 then
+        player.x = 0
     end
 
-    if player.x > W - player.w - 12 then
-        player.x = W - player.w - 12
+    if player.x > W - player.w then
+        player.x = W - player.w
     end
 
-    -- Disparo da defesa
+    -- Disparo da nave usando B
     if shootCooldown > 0 then
         shootCooldown = shootCooldown - 1
     end
 
-    if ui.btn(BTN_Z) and shootCooldown == 0 then
+    if ui.btn(FIRE_BUTTON) and shootCooldown == 0 then
         for i = 1, 3 do
             local b = playerBullets[i]
 
@@ -186,7 +174,7 @@ function loop(frame)
         end
     end
 
-    -- RED TEAM AVANCA
+    -- Movimento do Red Team
     local hitEdge = false
 
     for i = 1, 12 do
@@ -195,7 +183,7 @@ function loop(frame)
         if e.alive then
             e.x = e.x + enemyDirection
 
-            if e.x < 55 or e.x > 440 then
+            if e.x < 5 or e.x > W - 25 then
                 hitEdge = true
             end
         end
@@ -217,14 +205,14 @@ function loop(frame)
         end
     end
 
-    -- Projeteis azuis e colisao com virus
+    -- Projeteis azuis atingem os virus
     for i = 1, 3 do
         local b = playerBullets[i]
 
         if b.active then
             b.y = b.y - BULLET_SPEED
 
-            if b.y < 35 then
+            if b.y < 0 then
                 b.active = false
             else
                 for j = 1, 12 do
@@ -250,7 +238,7 @@ function loop(frame)
         end
     end
 
-    -- RED TEAM DISPARA contra a defesa
+    -- Virus do Red Team disparam periodicamente
     if tick % 35 == 0 then
         for attempt = 1, 12 do
             local idx = ((enemyShotIndex + attempt - 2) % 12) + 1
@@ -274,14 +262,14 @@ function loop(frame)
         end
     end
 
-    -- Projeteis vermelhos e colisao com a nave
+    -- Projeteis vermelhos atingem a nave
     for i = 1, 4 do
         local b = enemyBullets[i]
 
         if b.active then
             b.y = b.y + ENEMY_BULLET_SPEED
 
-            if b.y > 250 then
+            if b.y > H then
                 b.active = false
             elseif b.x >= player.x
             and b.x <= player.x + player.w
@@ -294,15 +282,23 @@ function loop(frame)
         end
     end
 
-    -- DESENHO DA NAVE BLUE TEAM
-    ui.rectfill(player.x + 5, player.y,
-                player.x + 10, player.y + 3, WHITE)
-    ui.rectfill(player.x + 2, player.y + 4,
-                player.x + 13, player.y + 8, BLUE)
-    ui.rectfill(player.x, player.y + 9,
-                player.x + 15, player.y + 11, BLUE)
+    -- Nave azul
+    ui.rectfill(
+        player.x + 5, player.y,
+        player.x + 10, player.y + 3, WHITE
+    )
 
-    -- DESENHO DOS VIRUS RED TEAM
+    ui.rectfill(
+        player.x + 2, player.y + 4,
+        player.x + 13, player.y + 8, BLUE
+    )
+
+    ui.rectfill(
+        player.x, player.y + 9,
+        player.x + 15, player.y + 11, BLUE
+    )
+
+    -- Virus vermelhos
     local remaining = 0
 
     for i = 1, 12 do
@@ -311,43 +307,61 @@ function loop(frame)
         if e.alive then
             remaining = remaining + 1
 
-            ui.rectfill(e.x + 3, e.y,
-                        e.x + 14, e.y + 3, RED)
-            ui.rectfill(e.x, e.y + 4,
-                        e.x + 17, e.y + 9, RED)
-            ui.rectfill(e.x + 3, e.y + 10,
-                        e.x + 6, e.y + 12, RED)
-            ui.rectfill(e.x + 12, e.y + 10,
-                        e.x + 15, e.y + 12, RED)
+            ui.rectfill(
+                e.x + 3, e.y,
+                e.x + 14, e.y + 3, RED
+            )
 
-            ui.rectfill(e.x + 4, e.y + 5,
-                        e.x + 6, e.y + 6, WHITE)
-            ui.rectfill(e.x + 11, e.y + 5,
-                        e.x + 13, e.y + 6, WHITE)
+            ui.rectfill(
+                e.x, e.y + 4,
+                e.x + 17, e.y + 9, RED
+            )
+
+            ui.rectfill(
+                e.x + 3, e.y + 10,
+                e.x + 6, e.y + 12, RED
+            )
+
+            ui.rectfill(
+                e.x + 12, e.y + 10,
+                e.x + 15, e.y + 12, RED
+            )
+
+            ui.rectfill(
+                e.x + 4, e.y + 5,
+                e.x + 6, e.y + 6, WHITE
+            )
+
+            ui.rectfill(
+                e.x + 11, e.y + 5,
+                e.x + 13, e.y + 6, WHITE
+            )
         end
     end
 
-    -- Projeteis da defesa
+    -- Projeteis azuis
     for i = 1, 3 do
         local b = playerBullets[i]
 
         if b.active then
-            ui.rectfill(b.x, b.y, b.x + 2, b.y + 5, GREEN)
+            ui.rectfill(
+                b.x, b.y,
+                b.x + 2, b.y + 5, GREEN
+            )
         end
     end
 
-    -- Projeteis do ataque
+    -- Projeteis vermelhos
     for i = 1, 4 do
         local b = enemyBullets[i]
 
         if b.active then
-            ui.rectfill(b.x, b.y, b.x + 2, b.y + 5, RED)
+            ui.rectfill(
+                b.x, b.y,
+                b.x + 2, b.y + 5, RED
+            )
         end
     end
-
-    -- Status inferior
-    ui.rectfill(8, 251, 471, 260, BLUE)
-    ui.print("FIREWALL: ACTIVE // DEFEND THE CORE", 100, 253, WHITE)
 
     if remaining == 0 then
         victory = true
