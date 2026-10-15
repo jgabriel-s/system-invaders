@@ -13,11 +13,10 @@ local WHITE  = 3
 local GREEN  = 4
 local YELLOW = 5
 
--- Cores RGB555
 local palette = {
     [0] = 0x0000,
-    [1] = 0x001F,
-    [2] = 0x7C00,
+    [1] = 0x7C00, 
+    [2] = 0x001F, 
     [3] = 0x7FFF,
     [4] = 0x03E0,
     [5] = 0x7FE0
