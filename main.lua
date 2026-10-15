@@ -32,7 +32,7 @@ function loop(frame)
     ui.camera(0,0)
     ui.cls(Palette.hex(0x0000))
     
-    local green = Palette.id(11)
+    local green = 11
 
     for y = 1, #terminal do
         ui.print(terminal[y], 0, (y - 1) * 12, green)
