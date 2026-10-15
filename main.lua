@@ -1,99 +1,88 @@
 -- ============================================================
--- SYSTEM INVADERS (Primitives Edition)
+-- SYSTEM INVADERS (Static / No-Animation Edition)
 -- Lupi Game API (480x270 @ 60 FPS)
 -- ============================================================
 
 local Palette = { 0x0000, 0x03E0, 0x0120, 0x001F, 0x03FF, 0x7C00, 0x7FE0, 0x7FFF }
 
--- Estado do Jogador (Nave Blue Team)
-local px, py = 220, 245
+-- Posição do Jogador
+local px = 220
 
--- Projéteis Reduzidos (Pool Fixo de 3 Tiros)
-local pb = {
-    { x = 0, y = 0, act = false },
-    { x = 0, y = 0, act = false },
-    { x = 0, y = 0, act = false }
-}
+-- Máscara de bits para 6 inimigos (63 = todos vivos)
+local enemies_mask = 63
 
-local eb = {
-    { x = 0, y = 0, act = false },
-    { x = 0, y = 0, act = false },
-    { x = 0, y = 0, act = false }
-}
+-- Posições X fixas e estáticas dos 6 inimigos
+local ex_pos = { 60, 115, 170, 225, 280, 335 }
 
--- Inimigos (6 Vírus Vermelhos)
-local enemies = {
-    { x = 40,  y = 40, act = true },
-    { x = 100, y = 40, act = true },
-    { x = 160, y = 40, act = true },
-    { x = 220, y = 40, act = true },
-    { x = 280, y = 40, act = true },
-    { x = 340, y = 40, act = true }
-}
+-- Pools fixos de tiros (3 do Player, 3 dos Inimigos)
+local pb = { {x=0, y=0, a=false}, {x=0, y=0, a=false}, {x=0, y=0, a=false} }
+local eb = { {x=0, y=0, a=false}, {x=0, y=0, a=false}, {x=0, y=0, a=false} }
 
-local edir = 1
-local anim = 1
-
--- Barreiras de Firewall (2 Módulos)
-local fw = {
-    { x = 120, y = 205, hp = 6 },
-    { x = 300, y = 205, hp = 6 }
-}
+-- Firewalls (HP)
+local fw1_hp, fw2_hp = 6, 6
 
 function update(frame)
-    -- 1. Registro de Paleta
+    -- 1. Registro de Paleta (Obrigatório Lupi API)
     for i = 1, 8 do ui.palset(i - 1, Palette[i]) end
     ui.cls(0)
 
-    -- 2. Movimentação e Disparo do Jogador
+    -- 2. Movimentação do Jogador
     if ui.btn(0) then px = px - 3 end -- LEFT
     if ui.btn(1) then px = px + 3 end -- RIGHT
     px = ui.mid(10, px, 430)
 
-    if ui.btnp(4) or ui.btnp(5) then -- BTN_Z / BTN_X
+    -- Disparo do Jogador
+    if ui.btnp(4) or ui.btnp(5) then
         for i = 1, 3 do
-            if not pb[i].act then
+            if not pb[i].a then
                 pb[i].x = px + 18
-                pb[i].y = py - 4
-                pb[i].act = true
+                pb[i].y = 241
+                pb[i].a = true
                 break
             end
         end
     end
 
-    -- 3. Atualizar Tiros do Jogador
+    -- 3. Atualização dos Tiros
     for i = 1, 3 do
-        if pb[i].act then
+        if pb[i].a then
             pb[i].y = pb[i].y - 5
-            if pb[i].y < 20 then pb[i].act = false end
+            if pb[i].y < 20 then pb[i].a = false end
         end
-    end
-
-    -- 4. Atualizar Tiros dos Inimigos
-    for i = 1, 3 do
-        if eb[i].act then
+        if eb[i].a then
             eb[i].y = eb[i].y + 3
-            if eb[i].y > 260 then eb[i].act = false end
+            if eb[i].y > 260 then eb[i].a = false end
         end
     end
 
-    -- 5. Atualizar Inimigos
-    if frame % 30 == 0 then anim = (anim == 1) and 2 or 1 end
-    local edge = false
-
-    for i = 1, 6 do
-        local e = enemies[i]
-        if e.act then
-            e.x = e.x + (edir * 0.5)
-            if e.x > 430 or e.x < 10 then edge = true end
-
-            -- Disparo Inimigo Aleatório
-            if math.random(1, 300) == 1 then
+    -- 4. Disparo Inimigo Estático (Intervalo fixo sem animações de movimento)
+    if frame % 90 == 0 then
+        for i = 1, 6 do
+            local bit = 2 ^ (i - 1)
+            if (enemies_mask % (bit * 2)) >= bit then
                 for j = 1, 3 do
-                    if not eb[j].act then
-                        eb[j].x = e.x + 12
-                        eb[j].y = e.y + 12
-                        eb[j].act = true
+                    if not eb[j].a then
+                        eb[j].x = ex_pos[i] + 12
+                        eb[j].y = 52
+                        eb[j].a = true
+                        break
+                    end
+                end
+                break
+            end
+        end
+    end
+
+    -- 5. Colisão Tiros vs Inimigos Estáticos (Y fixo em 40)
+    for i = 1, 3 do
+        if pb[i].a then
+            for j = 1, 6 do
+                local bit = 2 ^ (j - 1)
+                if (enemies_mask % (bit * 2)) >= bit then
+                    local ex = ex_pos[j]
+                    if pb[i].x >= ex and pb[i].x <= ex + 24 and pb[i].y >= 40 and pb[i].y <= 56 then
+                        enemies_mask = enemies_mask - bit
+                        pb[i].a = false
                         break
                     end
                 end
@@ -101,86 +90,58 @@ function update(frame)
         end
     end
 
-    if edge then
-        edir = -edir
-        for i = 1, 6 do enemies[i].y = enemies[i].y + 6 end
-    end
-
-    -- 6. Colisões
+    -- 6. Colisões Tiros vs Firewalls
     for i = 1, 3 do
-        if pb[i].act then
-            for j = 1, 6 do
-                local e = enemies[j]
-                if e.act and pb[i].x >= e.x and pb[i].x <= e.x + 24 and pb[i].y >= e.y and pb[i].y <= e.y + 16 then
-                    e.act = false
-                    pb[i].act = false
-                    break
-                end
+        if fw1_hp > 0 then
+            if pb[i].a and pb[i].x >= 120 and pb[i].x <= 160 and pb[i].y >= 205 and pb[i].y <= 217 then
+                fw1_hp = fw1_hp - 1; pb[i].a = false
+            end
+            if eb[i].a and eb[i].x >= 120 and eb[i].x <= 160 and eb[i].y >= 205 and eb[i].y <= 217 then
+                fw1_hp = fw1_hp - 1; eb[i].a = false
+            end
+        end
+        if fw2_hp > 0 then
+            if pb[i].a and pb[i].x >= 300 and pb[i].x <= 340 and pb[i].y >= 205 and pb[i].y <= 217 then
+                fw2_hp = fw2_hp - 1; pb[i].a = false
+            end
+            if eb[i].a and eb[i].x >= 300 and eb[i].x <= 340 and eb[i].y >= 205 and eb[i].y <= 217 then
+                fw2_hp = fw2_hp - 1; eb[i].a = false
             end
         end
     end
 
-    for i = 1, 2 do
-        if fw[i].hp > 0 then
-            for j = 1, 3 do
-                if pb[j].act and pb[j].x >= fw[i].x and pb[j].x <= fw[i].x + 40 and pb[j].y >= fw[i].y and pb[j].y <= fw[i].y + 12 then
-                    fw[i].hp = fw[i].hp - 1
-                    pb[j].act = false
-                end
-                if eb[j].act and eb[j].x >= fw[i].x and eb[j].x <= fw[i].x + 40 and eb[j].y >= fw[i].y and eb[j].y <= fw[i].y + 12 then
-                    fw[i].hp = fw[i].hp - 1
-                    eb[j].act = false
-                end
-            end
-        end
+    -- 7. Renderização com Primitivas Estáticas
+
+    -- Firewalls (Blocos Verdes Estáticos)
+    if fw1_hp > 0 then
+        ui.rectfill(120, 205, 160, 215, (fw1_hp > 3) and 1 or 6)
+        ui.rect(120, 205, 160, 215, 7)
+    end
+    if fw2_hp > 0 then
+        ui.rectfill(300, 205, 340, 215, (fw2_hp > 3) and 1 or 6)
+        ui.rect(300, 205, 340, 215, 7)
     end
 
-    -- 7. Renderização com Primitivas Gráficas
+    -- Nave Blue Team
+    ui.rectfill(px, 249, px + 36, 255, 3)
+    ui.trisfill(px + 12, 249, px + 24, 249, px + 18, 243, 4)
 
-    -- Firewalls (Blocos Verdes em Degradê por Dano)
-    for i = 1, 2 do
-        if fw[i].hp > 0 then
-            local col = (fw[i].hp > 3) and 1 or 6
-            ui.rectfill(fw[i].x, fw[i].y, fw[i].x + 40, fw[i].y + 10, col)
-            ui.rect(fw[i].x, fw[i].y, fw[i].x + 40, fw[i].y + 10, 7)
-        end
-    end
-
-    -- Nave Blue Team (Formato Geométrico Azul)
-    ui.rectfill(px, py + 4, px + 36, py + 10, 3)     -- Base
-    ui.trisfill(px + 12, py + 4, px + 24, py + 4, px + 18, py - 2, 4) -- Ponta da Nave
-
-    -- Vírus Red Team (Formato Losango/Inimigo Pulsante)
+    -- Inimigos Red Team (Desenho Estático Sem Alternância de Frames)
     for i = 1, 6 do
-        local e = enemies[i]
-        if e.act then
-            if anim == 1 then
-                -- Frame 1: Losango Vermelho com Centro Claro
-                ui.trisfill(e.x + 12, e.y, e.x, e.y + 8, e.x + 24, e.y + 8, 5)
-                ui.trisfill(e.x, e.y + 8, e.x + 24, e.y + 8, e.x + 12, e.y + 16, 5)
-                ui.circfill(e.x + 12, e.y + 8, 2, 7)
-            else
-                -- Frame 2: Quadrado Rotacionado
-                ui.rectfill(e.x + 4, e.y + 2, e.x + 20, e.y + 14, 5)
-                ui.rect(e.x + 2, e.y, e.x + 22, e.y + 16, 6)
-            end
+        local bit = 2 ^ (i - 1)
+        if (enemies_mask % (bit * 2)) >= bit then
+            local ex = ex_pos[i]
+            ui.rectfill(ex + 4, 42, ex + 20, 54, 5)
+            ui.rect(ex + 2, 40, ex + 22, 56, 6)
         end
     end
 
-    -- Tiros do Player (Cyan)
+    -- Tiros
     for i = 1, 3 do
-        if pb[i].act then
-            ui.rectfill(pb[i].x, pb[i].y, pb[i].x + 2, pb[i].y + 6, 4)
-        end
+        if pb[i].a then ui.rectfill(pb[i].x, pb[i].y, pb[i].x + 2, pb[i].y + 6, 4) end
+        if eb[i].a then ui.circfill(eb[i].x, eb[i].y, 3, 5) end
     end
 
-    -- Tiros Inimigos (Vermelho)
-    for i = 1, 3 do
-        if eb[i].act then
-            ui.circfill(eb[i].x, eb[i].y, 3, 5)
-        end
-    end
-
-    -- Linha Superior do HUD
+    -- HUD Estático
     ui.line(0, 16, 480, 16, 1)
 end
