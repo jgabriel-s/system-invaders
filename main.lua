@@ -26,7 +26,7 @@ local FIRE_BUTTON = BTN_Z
 
 local TURN_SPEED = 0.055
 local BULLET_SPEED = 4
-local ENEMY_SPEED = 0.45
+local ENEMY_SPEED = 0.30
 local MAX_ENEMIES = 6
 local MAX_BULLETS = 8
 
