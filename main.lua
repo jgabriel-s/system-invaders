@@ -1,252 +1,161 @@
 -- ============================================================
--- SYSTEM INVADERS (Memory Optimized Edition)
+-- SYSTEM INVADERS (Ultra-Light Prototype)
 -- Lupi Game API (480x270 @ 60 FPS)
 -- ============================================================
 
-Palette = {
-    0x0000, 0x03E0, 0x0120, 0x001F, 0x03FF, 0x7C00, 0x7FE0, 0x7FFF
+local Palette = { 0x0000, 0x03E0, 0x0120, 0x001F, 0x03FF, 0x7C00, 0x7FE0, 0x7FFF }
+
+-- Estado do Jogador
+local px, py = 210, 245
+
+-- Projéteis Reduzidos (Pool Fixo de 3 Tiros)
+local pb = {
+    { x = 0, y = 0, act = false },
+    { x = 0, y = 0, act = false },
+    { x = 0, y = 0, act = false }
 }
 
-local GAME_STATE = "PLAYING"
-
--- Player (blue team)
-local player = { x = 210, y = 245, hp = 100, score = 0 }
-
--- Pools fixas de tiros (sem table.insert/remove para evitar garbage collection)
-local MAX_P_BULLETS = 8
-local p_bullets = {}
-for i = 1, MAX_P_BULLETS do p_bullets[i] = { x = 0, y = 0, active = false } end
-
-local MAX_E_BULLETS = 12
-local e_bullets = {}
-for i = 1, MAX_E_BULLETS do e_bullets[i] = { x = 0, y = 0, active = false } end
-
--- Inimigos fixos (24 no total)
-local enemies = {}
-for i = 1, 24 do enemies[i] = { x = 0, y = 0, type = 1, alive = false } end
-
-local enemy_dir = 1
-local enemy_speed = 0.5
-local anim_frame = 1
-
-local ENEMY_TYPES = {
-    { score = 30, a1 = "<{o}>", a2 = "<{x}>" },
-    { score = 20, a1 = "~(o)~", a2 = "=(o)=" },
-    { score = 10, a1 = "[R#X]", a2 = "[R!X]" }
+local eb = {
+    { x = 0, y = 0, act = false },
+    { x = 0, y = 0, act = false },
+    { x = 0, y = 0, act = false }
 }
 
--- Firewalls fixos (4 nós)
-local firewalls = {}
-for i = 1, 4 do firewalls[i] = { x = 0, y = 210, hp = 12 } end
+-- Inimigos Reduzidos (Apenas 6 Vírus)
+local enemies = {
+    { x = 40,  y = 40, act = true },
+    { x = 100, y = 40, act = true },
+    { x = 160, y = 40, act = true },
+    { x = 220, y = 40, act = true },
+    { x = 280, y = 40, act = true },
+    { x = 340, y = 40, act = true }
+}
 
-function init_game()
-    GAME_STATE = "PLAYING"
-    player.x = 210
-    player.hp = 100
-    player.score = 0
+local edir = 1
+local anim = 1
 
-    -- Limpa tiros
-    for i = 1, MAX_P_BULLETS do p_bullets[i].active = false end
-    for i = 1, MAX_E_BULLETS do e_bullets[i].active = false end
+-- Barreiras de Firewall (2 Módulos)
+local fw = {
+    { x = 120, y = 210, hp = 6 },
+    { x = 280, y = 210, hp = 6 }
+}
 
-    -- Reset inimigos (3 linhas x 8 colunas)
-    local idx = 1
-    for row = 1, 3 do
-        for col = 1, 8 do
-            local e = enemies[idx]
-            e.x = 30 + (col - 1) * 50
-            e.y = 35 + (row - 1) * 22
-            e.type = row
-            e.alive = true
-            idx = idx + 1
-        end
-    end
-
-    -- Reset firewalls
-    for i = 1, 4 do
-        firewalls[i].x = 60 + (i - 1) * 105
-        firewalls[i].hp = 12
-    end
-end
-
-init_game()
-
--- Função disparada a cada frame
 function update(frame)
-    -- Palette registration
+    -- 1. Registo de Paleta
     for i = 1, 8 do ui.palset(i - 1, Palette[i]) end
     ui.cls(0)
 
-    -- Background decorativo
-    for y = 0, 270, 20 do ui.line(0, y, 480, y, 2) end
-    ui.rect(2, 2, 477, 267, 1)
+    -- 2. Movimentação e Disparo do Jogador
+    if ui.btn(0) then px = px - 3 end -- LEFT
+    if ui.btn(1) then px = px + 3 end -- RIGHT
+    px = ui.mid(10, px, 410)
 
-    if GAME_STATE == "PLAYING" then
-        -- Controle Player
-        if ui.btn(0) then player.x = player.x - 3 end -- LEFT
-        if ui.btn(1) then player.x = player.x + 3 end -- RIGHT
-        player.x = ui.mid(10, player.x, 410)
-
-        -- Disparo Player
-        if ui.btnp(4) or ui.btnp(5) then -- BTN_Z ou BTN_X
-            for i = 1, MAX_P_BULLETS do
-                if not p_bullets[i].active then
-                    p_bullets[i].x = player.x + 28
-                    p_bullets[i].y = player.y - 6
-                    p_bullets[i].active = true
-                    break
-                end
+    if ui.btnp(4) or ui.btnp(5) then -- BTN_Z / BTN_X
+        for i = 1, 3 do
+            if not pb[i].act then
+                pb[i].x = px + 28
+                pb[i].y = py - 6
+                pb[i].act = true
+                break
             end
         end
+    end
 
-        -- Atualizar Tiros do Player
-        for i = 1, MAX_P_BULLETS do
-            local b = p_bullets[i]
-            if b.active then
-                b.y = b.y - 5
-                if b.y < 20 then b.active = false end
-            end
+    -- 3. Atualizar Tiros do Jogador
+    for i = 1, 3 do
+        if pb[i].act then
+            pb[i].y = pb[i].y - 5
+            if pb[i].y < 20 then pb[i].act = false end
         end
+    end
 
-        -- Atualizar Tiros dos Inimigos
-        for i = 1, MAX_E_BULLETS do
-            local b = e_bullets[i]
-            if b.active then
-                b.y = b.y + 3
-                if b.y > 260 then b.active = false end
-            end
+    -- 4. Atualizar Tiros dos Inimigos
+    for i = 1, 3 do
+        if eb[i].act then
+            eb[i].y = eb[i].y + 3
+            if eb[i].y > 260 then eb[i].act = false end
         end
+    end
 
-        -- Atualizar Inimigos
-        if frame % 30 == 0 then anim_frame = (anim_frame == 1) and 2 or 1 end
-        local move_x = enemy_dir * enemy_speed
-        local hit_edge = false
-        local alive_count = 0
+    -- 5. Atualizar Inimigos
+    if frame % 30 == 0 then anim = (anim == 1) and 2 or 1 end
+    local edge = false
 
-        for i = 1, 24 do
-            local e = enemies[i]
-            if e.alive then
-                alive_count = alive_count + 1
-                e.x = e.x + move_x
-                if e.x > 420 or e.x < 10 then hit_edge = true end
+    for i = 1, 6 do
+        local e = enemies[i]
+        if e.act then
+            e.x = e.x + (edir * 0.5)
+            if e.x > 430 or e.x < 10 then edge = true end
 
-                -- Chance de tiro inimigo
-                if math.random(1, 400) == 1 then
-                    for j = 1, MAX_E_BULLETS do
-                        if not e_bullets[j].active then
-                            e_bullets[j].x = e.x + 15
-                            e_bullets[j].y = e.y + 10
-                            e_bullets[j].active = true
-                            break
-                        end
-                    end
-                end
-
-                if e.y >= 200 then GAME_STATE = "GAMEOVER" end
-            end
-        end
-
-        if alive_count == 0 then GAME_STATE = "WIN" end
-
-        if hit_edge then
-            enemy_dir = -enemy_dir
-            for i = 1, 24 do enemies[i].y = enemies[i].y + 8 end
-        end
-
-        -- Checar Colisões
-        -- Tiro Player vs Inimigo
-        for i = 1, MAX_P_BULLETS do
-            local pb = p_bullets[i]
-            if pb.active then
-                for j = 1, 24 do
-                    local e = enemies[j]
-                    if e.alive and pb.x >= e.x and pb.x <= e.x + 35 and pb.y >= e.y and pb.y <= e.y + 15 then
-                        e.alive = false
-                        pb.active = false
-                        player.score = player.score + ENEMY_TYPES[e.type].score
+            -- Disparo Inimigo Aleatório
+            if math.random(1, 300) == 1 then
+                for j = 1, 3 do
+                    if not eb[j].act then
+                        eb[j].x = e.x + 15
+                        eb[j].y = e.y + 10
+                        eb[j].act = true
                         break
                     end
                 end
             end
         end
+    end
 
-        -- Tiros vs Firewalls
-        for i = 1, 4 do
-            local fw = firewalls[i]
-            if fw.hp > 0 then
-                for j = 1, MAX_P_BULLETS do
-                    local pb = p_bullets[j]
-                    if pb.active and pb.x >= fw.x and pb.x <= fw.x + 50 and pb.y >= fw.y and pb.y <= fw.y + 12 then
-                        fw.hp = fw.hp - 1
-                        pb.active = false
-                    end
-                end
-                for j = 1, MAX_E_BULLETS do
-                    local eb = e_bullets[j]
-                    if eb.active and eb.x >= fw.x and eb.x <= fw.x + 50 and eb.y >= fw.y and eb.y <= fw.y + 12 then
-                        fw.hp = fw.hp - 1
-                        eb.active = false
-                    end
+    if edge then
+        edir = -edir
+        for i = 1, 6 do enemies[i].y = enemies[i].y + 6 end
+    end
+
+    -- 6. Colisões
+    for i = 1, 3 do
+        if pb[i].act then
+            for j = 1, 6 do
+                local e = enemies[j]
+                if e.act and pb[i].x >= e.x and pb[i].x <= e.x + 35 and pb[i].y >= e.y and pb[i].y <= e.y + 15 then
+                    e.act = false
+                    pb[i].act = false
+                    break
                 end
             end
         end
+    end
 
-        -- Tiro Inimigo vs Player
-        for i = 1, MAX_E_BULLETS do
-            local eb = e_bullets[i]
-            if eb.active and eb.x >= player.x and eb.x <= player.x + 60 and eb.y >= player.y and eb.y <= player.y + 10 then
-                player.hp = player.hp - 20
-                eb.active = false
-                if player.hp <= 0 then GAME_STATE = "GAMEOVER" end
+    for i = 1, 2 do
+        if fw[i].hp > 0 then
+            for j = 1, 3 do
+                if pb[j].act and pb[j].x >= fw[i].x and pb[j].x <= fw[i].x + 40 and pb[j].y >= fw[i].y and pb[j].y <= fw[i].y + 12 then
+                    fw[i].hp = fw[i].hp - 1
+                    pb[j].act = false
+                end
+                if eb[j].act and eb[j].x >= fw[i].x and eb[j].x <= fw[i].x + 40 and eb[j].y >= fw[i].y and eb[j].y <= fw[i].y + 12 then
+                    fw[i].hp = fw[i].hp - 1
+                    eb[j].act = false
+                end
             end
         end
-
-    elseif ui.btnp(4) or ui.btnp(5) then
-        init_game()
     end
 
-    -- Desenhar Elementos
-    for i = 1, 4 do
-        local fw = firewalls[i]
-        if fw.hp > 0 then
-            ui.print("[FW::NET] " .. fw.hp, fw.x, fw.y, (fw.hp > 6) and 1 or 6)
+    -- 7. Desenho dos Elementos
+    ui.print("[===A===]", px, py, 3)
+
+    for i = 1, 6 do
+        if enemies[i].act then
+            ui.print((anim == 1) and "<{o}>" or "<{x}>", enemies[i].x, enemies[i].y, 5)
         end
     end
 
-    ui.print("[===A===]", player.x, player.y, 3)
-
-    for i = 1, 24 do
-        local e = enemies[i]
-        if e.alive then
-            local t = ENEMY_TYPES[e.type]
-            ui.print((anim_frame == 1) and t.a1 or t.a2, e.x, e.y, 5)
+    for i = 1, 2 do
+        if fw[i].hp > 0 then
+            ui.print("[FW::NET]", fw[i].x, fw[i].y, 1)
         end
     end
 
-    for i = 1, MAX_P_BULLETS do
-        if p_bullets[i].active then ui.print("|", p_bullets[i].x, p_bullets[i].y, 4) end
+    for i = 1, 3 do
+        if pb[i].act then ui.print("|", pb[i].x, pb[i].y, 4) end
+        if eb[i].act then ui.print("v", eb[i].x, eb[i].y, 5) end
     end
 
-    for i = 1, MAX_E_BULLETS do
-        if e_bullets[i].active then ui.print("v", e_bullets[i].x, e_bullets[i].y, 5) end
-    end
-
-    -- UI Top Bar
-    ui.rectfill(0, 0, 480, 16, 0)
+    -- Top Bar
     ui.line(0, 16, 480, 16, 1)
-    ui.print("SYS_SEC v1.0", 10, 4, 1)
-    ui.print("SCORE: " .. player.score, 140, 4, 1)
-    ui.print("KERNEL: " .. player.hp .. "%", 280, 4, (player.hp > 40) and 3 or 5)
-
-    if GAME_STATE == "GAMEOVER" then
-        ui.rectfill(80, 90, 400, 170, 0)
-        ui.rect(80, 90, 400, 170, 5)
-        ui.print("[!] CRITICAL SYSTEM FAILURE [!]", 110, 110, 5)
-        ui.print("PRESS [Z] TO REBOOT SYSTEM", 130, 140, 1)
-    elseif GAME_STATE == "WIN" then
-        ui.rectfill(80, 90, 400, 170, 0)
-        ui.rect(80, 90, 400, 170, 3)
-        ui.print("[+] THREAT NEUTRALIZED [+]", 130, 110, 3)
-        ui.print("PRESS [Z] TO INITIALIZE NEW SCAN", 105, 140, 1)
-    end
+    ui.print("SYS_INVADERS // PROTO", 10, 4, 1)
 end
