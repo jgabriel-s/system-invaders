@@ -131,11 +131,11 @@ function loop(frame)
     end
 
     -- Movimento do jogador
-    if ui.btn(BTN_LEFT) then
+    if ui.btn(LEFT) then
         player.x = player.x - PLAYER_SPEED
     end
 
-    if ui.btn(BTN_RIGHT) then
+    if ui.btn(RIGHT) then
         player.x = player.x + PLAYER_SPEED
     end
 
