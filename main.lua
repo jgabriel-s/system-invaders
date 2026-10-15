@@ -1,7 +1,6 @@
 
 -- SPACE INVADERS: CIRCULAR DEFENSE
--- Jogador fixo no centro
--- LEFT / RIGHT: girar
+-- LEFT / RIGHT: girar a nave
 -- B: atirar / reiniciar
 
 local W, H = 480, 270
@@ -28,7 +27,7 @@ local FIRE_BUTTON = BTN_Z
 local TURN_SPEED = 0.055
 local BULLET_SPEED = 4
 local ENEMY_SPEED = 0.45
-local MAX_ENEMIES = 12
+local MAX_ENEMIES = 6
 local MAX_BULLETS = 8
 
 local angle = -math.pi / 2
@@ -37,7 +36,80 @@ local tick = 0
 local shootCooldown = 0
 local gameOver = false
 
--- Reutiliza os mesmos objetos de inimigos
+-- Coordenadas reutilizáveis para desenhar triângulos
+local vx = {0, 0, 0}
+local vy = {0, 0, 0}
+
+-- Desenha um triângulo preenchido usando apenas rectfill
+local function drawTriangle(x, y, a, size, color)
+    local tipX = x + math.cos(a) * size
+    local tipY = y + math.sin(a) * size
+
+    local backX = x - math.cos(a) * size * 0.65
+    local backY = y - math.sin(a) * size * 0.65
+
+    local sideX = math.cos(a + math.pi / 2) * size * 0.65
+    local sideY = math.sin(a + math.pi / 2) * size * 0.65
+
+    vx[1] = tipX
+    vy[1] = tipY
+
+    vx[2] = backX + sideX
+    vy[2] = backY + sideY
+
+    vx[3] = backX - sideX
+    vy[3] = backY - sideY
+
+    local minY = math.floor(math.min(vy[1], vy[2], vy[3]))
+    local maxY = math.ceil(math.max(vy[1], vy[2], vy[3]))
+
+    for py = minY, maxY do
+        local left = 9999
+        local right = -9999
+
+        for i = 1, 3 do
+            local j = i % 3 + 1
+            local y1 = vy[i]
+            local y2 = vy[j]
+
+            if (py >= math.min(y1, y2))
+            and (py < math.max(y1, y2))
+            and (y1 ~= y2) then
+
+                local xHit = vx[i] +
+                    (py - y1) * (vx[j] - vx[i]) / (y2 - y1)
+
+                if xHit < left then left = xHit end
+                if xHit > right then right = xHit end
+            end
+        end
+
+        if left <= right then
+            ui.rectfill(
+                math.floor(left), py,
+                math.ceil(right), py,
+                color
+            )
+        end
+    end
+end
+
+-- Ângulo que aponta de um ponto para outro
+local function angleTo(x1, y1, x2, y2)
+    local dx = x2 - x1
+    local dy = y2 - y1
+
+    if dx > 0 then
+        return math.atan(dy / dx)
+    elseif dx < 0 then
+        return math.atan(dy / dx) + math.pi
+    elseif dy >= 0 then
+        return math.pi / 2
+    else
+        return -math.pi / 2
+    end
+end
+
 local enemies = {}
 
 local function respawnEnemy(e)
@@ -59,7 +131,6 @@ for i = 1, MAX_ENEMIES do
     respawnEnemy(enemies[i])
 end
 
--- Projéteis criados uma única vez
 local bullets = {}
 
 for i = 1, MAX_BULLETS do
@@ -127,7 +198,7 @@ function loop(frame)
         return
     end
 
-    -- Girar a nave sem deslocar o jogador
+    -- Girar a nave
     if ui.btn(LEFT) then
         angle = angle - TURN_SPEED
     end
@@ -136,7 +207,7 @@ function loop(frame)
         angle = angle + TURN_SPEED
     end
 
-    -- Disparo com intervalo entre tiros
+    -- Disparo
     if shootCooldown > 0 then
         shootCooldown = shootCooldown - 1
     end
@@ -146,7 +217,7 @@ function loop(frame)
         shootCooldown = 10
     end
 
-    -- Atualizar inimigos
+    -- Inimigos avançam e apontam para o jogador
     for i = 1, MAX_ENEMIES do
         local e = enemies[i]
 
@@ -164,7 +235,7 @@ function loop(frame)
         end
     end
 
-    -- Atualizar projéteis e verificar colisões
+    -- Atualizar tiros e detectar colisões
     for i = 1, MAX_BULLETS do
         local b = bullets[i]
 
@@ -184,7 +255,6 @@ function loop(frame)
                         local dy = b.y - e.y
 
                         if dx * dx + dy * dy < 64 then
-                            -- Reposiciona o inimigo derrotado
                             respawnEnemy(e)
                             b.active = false
                             score = score + 10
@@ -196,17 +266,19 @@ function loop(frame)
         end
     end
 
-    -- Desenhar inimigos
+    -- Desenhar inimigos triangulares apontando para o centro
     for i = 1, MAX_ENEMIES do
         local e = enemies[i]
 
         if e.alive then
-            ui.rectfill(
-                e.x - 4, e.y - 4,
-                e.x + 4, e.y + 4,
-                RED
+            local enemyAngle = angleTo(e.x, e.y, CX, CY)
+
+            drawTriangle(
+                e.x, e.y,
+                enemyAngle, 7, RED
             )
 
+            -- Olhos
             ui.rectfill(
                 e.x - 2, e.y - 1,
                 e.x - 1, e.y,
@@ -214,8 +286,8 @@ function loop(frame)
             )
 
             ui.rectfill(
-                e.x + 2, e.y - 1,
-                e.x + 3, e.y,
+                e.x + 1, e.y - 1,
+                e.x + 2, e.y,
                 WHITE
             )
         end
@@ -234,20 +306,16 @@ function loop(frame)
         end
     end
 
-    -- Jogador fixo no centro
-    ui.rectfill(
-        CX - 5, CY - 5,
-        CX + 5, CY + 5,
-        BLUE
-    )
+    -- Nave triangular fixa no centro
+    drawTriangle(CX, CY, angle, 10, BLUE)
 
-    -- Indicador de direção da nave
-    local tipX = CX + math.cos(angle) * 13
-    local tipY = CY + math.sin(angle) * 13
+    -- Ponta branca indicando a direção da mira
+    local tipX = CX + math.cos(angle) * 12
+    local tipY = CY + math.sin(angle) * 12
 
     ui.rectfill(
-        tipX - 2, tipY - 2,
-        tipX + 2, tipY + 2,
+        tipX - 1, tipY - 1,
+        tipX + 1, tipY + 1,
         WHITE
     )
 end
